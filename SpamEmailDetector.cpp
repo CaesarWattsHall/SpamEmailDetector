@@ -1,82 +1,69 @@
 /*
 By: Caesar R. Watts-Hall
-Date: June 08, 2023
+Date: September 15, 2023
 */
 
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <map>
+#include <ctime>
+#include <sqlite3.h>
 using namespace std;
 
+map<string, bool> spamCriteria;
+
+// Function to load the spam criteria from a file
+void loadSpamCriteria() {
+    ifstream file("spamCriteria.txt");
+    string line;
+    while (getline(file, line)) {
+        if (line[0] == '#') continue;  // Ignore comment lines
+        string criterion = line.substr(0, line.find("="));
+        bool value = line.substr(line.find("=") + 1) == "true" ? true : false;
+        spamCriteria[criterion] = value;
+    }
+    file.close();
+}
+
+// Function to check if an email is spam based on the loaded criteria
 bool isSpamEmail(string email) {
-    // Function to check if the email is a spam email
-    // This function can be modified to implement the desired logic for checking spam emails
-    return email.find("spam") != string::npos; // Example: all emails containing the word "spam" are considered spam
-}
-
-void storeSpamEmail(string email) {
-    // Function to store the spam email in a text file
-    ofstream file;
-    file.open("spamEmails.txt", ios::app);
-    file << email << endl;
-    file.close();
-}
-
-void deleteSpamEmail(string email) {
-    // Function to delete the spam email from the text file
-    ifstream file;
-    file.open("spamEmails.txt");
-    ofstream temp;
-    temp.open("temp.txt");
-    string line;
-    while (getline(file, line)) {
-        if (line != email) {
-            temp << line << endl;
-        }
+    if (spamCriteria["containsSpam"] && email.find("spam") != string::npos) {
+        return true;
     }
-    temp.close();
-    file.close();
-    remove("spamEmails.txt");
-    rename("temp.txt", "spamEmails.txt");
+    // Add more criteria here...
+    return false;
 }
 
-void readSpamEmails() {
-    // Function to read and display the spam emails stored in the text file
-    ifstream file;
-    file.open("spamEmails.txt");
-    string line;
-    cout << "Spam emails:" << endl;
-    while (getline(file, line)) {
-        cout << line << endl;
-    }
-    file.close();
+// Function to log each email to a SQLite database
+void logEmail(string email, bool isSpam) {
+    sqlite3* DB;
+    sqlite3_open("emailLogs.db", &DB);
+
+    string sql = "INSERT INTO EMAIL_LOGS (EMAIL, TIME_STAMP, IS_SPAM) VALUES ('" 
+                 + email + "', datetime('now'), " + (isSpam ? "1" : "0") + ");";
+
+    sqlite3_exec(DB, sql.c_str(), NULL, 0, NULL);
+
+    sqlite3_close(DB);
 }
 
 int main() {
+    loadSpamCriteria();
+
     string email;
     cout << "Enter email: ";
     cin >> email;
 
-    if (isSpamEmail(email)) {
+    bool isSpam = isSpamEmail(email);
+    
+    if (isSpam) {
         cout << "The email is a spam email." << endl;
-        cout << "Do you want to store or delete the spam email in/from the text file? (store/delete): ";
-        string choice;
-        cin >> choice;
-        if (choice == "store") {
-            storeSpamEmail(email);
-            cout << "The spam email has been stored in the text file." << endl;
-        } else if (choice == "delete") {
-            deleteSpamEmail(email);
-            cout << "The spam email has been deleted from the text file." << endl;
-        } else if (choice == "read") {
-              readSpamEmails(email);
-            cout << "The spam emails will now be read and displayed from the text file." << endl;
-        } else {
-            cout << "Invalid choice." << endl;
-        }
     } else {
         cout << "The email is not a spam email." << endl;
     }
+
+    logEmail(email, isSpam);
 
     return 0;
 }
